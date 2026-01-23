@@ -172,8 +172,8 @@ def theft_notification():
 GAME_ID = os.getenv("GAME_ID", "109983668079237")
 BASE_URL = f"https://games.roblox.com/v1/games/{GAME_ID}/servers/Public"
 
-MAIN_API_URL = os.getenv("MAIN_API_URL", "https://worker-production-2f05.up.railway.app/") + "/add-pool"
-MAIN_API_STATUS = os.getenv("MAIN_API_URL", "https://worker-production-2f05.up.railway.app/") + "/status"
+MAIN_API_URL = os.getenv("MAIN_API_URL", "https://worker-production-2f05.up.railway.app") + "/add-pool"
+MAIN_API_STATUS = os.getenv("MAIN_API_URL", "https://worker-production-2f05.up.railway.app") + "/status"
 
 REQUEST_TIMEOUT = 20
 PAGE_DELAY = 0.05
