@@ -188,7 +188,7 @@ CACHE_CLEAR_INTERVAL = 300
 
 # Hardcoded proxy configuration
 PROXY_HOST = 'res-v1.netlify.xyz:8080'
-PROXY_AUTH = 'ayqjru:mhmny9ih
+PROXY_AUTH = 'ayqjru:mhmny9ih'
 
 def get_proxy_dict():
     """Get proxy dict for requests - hardcoded proxy"""
