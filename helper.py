@@ -175,16 +175,17 @@ BASE_URL = f"https://games.roblox.com/v1/games/{GAME_ID}/servers/Public"
 MAIN_API_URL = os.getenv("MAIN_API_URL", "https://worker-production-2f05.up.railway.app") + "/add-pool"
 MAIN_API_STATUS = os.getenv("MAIN_API_URL", "https://worker-production-2f05.up.railway.app") + "/status"
 
-REQUEST_TIMEOUT = 8
+REQUEST_TIMEOUT = 20
 PAGE_DELAY = 0.05
 ID_TTL = 60 * 15
-BATCH_MIN = 450
-BATCH_MAX = 950
+BATCH_MIN = 300
+BATCH_MAX = 800
 MAX_QUEUE_SIZE = 15000
 TARGET_MAIN_API = 999999
-TARGET_MIN = 2
+TARGET_MIN = 3
 TARGET_MAX = 7
 CACHE_CLEAR_INTERVAL = 300
+
 
 # Hardcoded proxy configuration
 PROXY_HOST = 'res-v1.nettify.xyz:8080'
