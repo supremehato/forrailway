@@ -177,14 +177,15 @@ MAIN_API_STATUS = os.getenv("MAIN_API_URL", "https://worker-production-2f05.up.r
 
 REQUEST_TIMEOUT = 20
 PAGE_DELAY = 0.05
-ID_TTL = 60 * 15
+ID_TTL = 60 * 5  # ✅ Reduced from 15 minutes to 5 minutes
+MAX_SERVER_AGE = 60 * 8  # ✅ NEW: Servers older than 8 minutes are discarded
 BATCH_MIN = 300
 BATCH_MAX = 800
 MAX_QUEUE_SIZE = 15000
 TARGET_MAIN_API = 999999
 TARGET_MIN = 3
 TARGET_MAX = 7
-CACHE_CLEAR_INTERVAL = 300
+CACHE_CLEAR_INTERVAL = 600  # ✅ Increased from 5 to 10 minutes
 
 # Hardcoded proxy configuration
 PROXY_HOST = 'eu.nettify.xyz:8080'
@@ -201,12 +202,46 @@ FETCH_PATTERN = ["Asc", "Desc", "Asc"]
 
 priority_queue = deque(maxlen=MAX_QUEUE_SIZE)
 server_queue = deque(maxlen=MAX_QUEUE_SIZE)
-recycle_queue = deque(maxlen=MAX_QUEUE_SIZE)
+# ✅ REMOVED: recycle_queue - no more recycling old servers!
 sent_ids = {}
 server_cache = set()
+server_ages = {}  # ✅ NEW: Track when servers were discovered
+blacklisted_servers = set()  # ✅ NEW: Track failed servers reported by bots
 
 lock = threading.Lock()
-stats = {"fetched": 0, "sent": 0, "duplicates": 0, "errors": 0, "ratelimits": 0}
+stats = {"fetched": 0, "sent": 0, "duplicates": 0, "errors": 0, "ratelimits": 0, "blacklisted": 0}
+
+# ✅ NEW: Add failure reporting endpoint
+@app.route("/report-failure", methods=["POST"])
+def report_failure():
+    """Allow bots to report failed servers"""
+    try:
+        data = request.get_json()
+        job_id = data.get("job_id")
+        
+        if not job_id:
+            return jsonify({"error": "job_id required"}), 400
+        
+        with lock:
+            blacklisted_servers.add(job_id)
+            server_cache.discard(job_id)
+            
+            # Remove from sent_ids if present
+            if job_id in sent_ids:
+                del sent_ids[job_id]
+            
+            # Remove from server_ages if present
+            if job_id in server_ages:
+                del server_ages[job_id]
+            
+            stats["blacklisted"] += 1
+        
+        logging.info(f"[BLACKLIST] Server reported as failed: {job_id}")
+        return jsonify({"status": "blacklisted", "job_id": job_id})
+        
+    except Exception as e:
+        logging.error(f"Report failure error: {e}")
+        return jsonify({"error": str(e)}), 500
 
 def test_proxy():
     """Test the hardcoded proxy"""
@@ -235,20 +270,42 @@ def check_main_api_size():
     return 0
 
 def cleanup_sent_ids():
+    """✅ FIXED: Remove expired servers without recycling them"""
     now = time.time()
     expired = [job for job, t in sent_ids.items() if t <= now]
     for job in expired:
         del sent_ids[job]
         server_cache.discard(job)
-        recycle_queue.append(job)
+        # ✅ REMOVED: No more recycle_queue.append(job)
+        # Old servers just die instead of being reused
+    
+    # ✅ NEW: Also clean up servers that are too old
+    old_servers = [job for job, age in server_ages.items() if now - age > MAX_SERVER_AGE]
+    for job in old_servers:
+        del server_ages[job]
+        server_cache.discard(job)
+        if job in sent_ids:
+            del sent_ids[job]
 
 def cache_clearer():
     while True:
         time.sleep(CACHE_CLEAR_INTERVAL)
         with lock:
-            old_size = len(server_cache)
-            server_cache.clear()
-            logging.info(f"Cache cleared: removed {old_size} duplicate entries")
+            # ✅ CHANGED: Don't clear entire cache, just clean up old/blacklisted servers
+            now = time.time()
+            to_remove = set()
+            
+            for job in server_cache:
+                # Remove if blacklisted or too old
+                if job in blacklisted_servers or (job in server_ages and now - server_ages[job] > MAX_SERVER_AGE):
+                    to_remove.add(job)
+            
+            for job in to_remove:
+                server_cache.discard(job)
+                if job in server_ages:
+                    del server_ages[job]
+            
+            logging.info(f"Cache cleaned: removed {len(to_remove)} old/blacklisted entries")
 
 def fetch_servers(sort_order):
     cursor = None
@@ -292,6 +349,7 @@ def fetch_servers(sort_order):
             data = r.json().get("data", [])
             
             priority = []
+            current_time = time.time()
             
             for s in data:
                 if "id" not in s or "playing" not in s:
@@ -304,10 +362,16 @@ def fetch_servers(sort_order):
                     continue
                 
                 with lock:
+                    # ✅ NEW: Skip blacklisted servers
+                    if jid in blacklisted_servers:
+                        continue
+                    
                     if jid in server_cache:
                         stats["duplicates"] += 1
                         continue
+                    
                     server_cache.add(jid)
+                    server_ages[jid] = current_time  # ✅ NEW: Track when discovered
                 
                 priority.append(jid)
             
@@ -340,24 +404,36 @@ def sender():
     while True:
         batch = []
         target = random.randint(BATCH_MIN, BATCH_MAX)
+        current_time = time.time()
         
         with lock:
             cleanup_sent_ids()
             
             while priority_queue and len(batch) < target:
                 jid = priority_queue.popleft()
+                
+                # ✅ NEW: Skip if server is too old or blacklisted
+                if jid in blacklisted_servers:
+                    continue
+                if jid in server_ages and current_time - server_ages[jid] > MAX_SERVER_AGE:
+                    continue
+                
                 sent_ids[jid] = time.time() + ID_TTL
                 batch.append(jid)
             
             while server_queue and len(batch) < target:
                 jid = server_queue.popleft()
+                
+                # ✅ NEW: Skip if server is too old or blacklisted
+                if jid in blacklisted_servers:
+                    continue
+                if jid in server_ages and current_time - server_ages[jid] > MAX_SERVER_AGE:
+                    continue
+                
                 sent_ids[jid] = time.time() + ID_TTL
                 batch.append(jid)
             
-            while recycle_queue and len(batch) < target:
-                jid = recycle_queue.popleft()
-                sent_ids[jid] = time.time() + ID_TTL
-                batch.append(jid)
+            # ✅ REMOVED: No more recycle_queue processing
         
         if batch:
             try:
@@ -390,6 +466,7 @@ def start_threads():
     logging.info(f"Target API: {MAIN_API_URL}")
     logging.info(f"Pattern: ASC -> DESC -> ASC (9 fetch + 4 sender)")
     logging.info(f"Player filter: {TARGET_MIN}-{TARGET_MAX}")
+    logging.info(f"Max server age: {MAX_SERVER_AGE}s")
     logging.info(f"Cache clear interval: {CACHE_CLEAR_INTERVAL}s")
 
 start_threads()
@@ -405,13 +482,14 @@ def home():
         return jsonify({
             "priority": len(priority_queue),
             "normal": len(server_queue),
-            "recycle": len(recycle_queue),
             "sent_pending": len(sent_ids),
             "cache_size": len(server_cache),
+            "blacklisted": len(blacklisted_servers),
             "stats": stats,
             "main_api_size": main_api_size,
             "rate": f"{rate:.1f} servers/sec",
-            "proxy": PROXY_HOST
+            "proxy": PROXY_HOST,
+            "max_server_age": MAX_SERVER_AGE
         })
 
 @app.route("/test-proxies")
