@@ -189,7 +189,7 @@ CACHE_CLEAR_INTERVAL = 600  # ✅ Increased from 5 to 10 minutes
 
 # Hardcoded proxy configuration
 PROXY_HOST = 'res-v1.nettify.xyz:8080'
-PROXY_AUTH = '4gt6dr:8y17qwqlvlwk'
+PROXY_AUTH = 'w3u041:t7giadcbkrnq'
 
 def get_proxy_dict():
     """Get proxy dict for requests - hardcoded proxy"""
